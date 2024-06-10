@@ -108,7 +108,7 @@ export const summaly = async (url: string, options?: SummalyOptions): Promise<Su
 	});
 };
 
-export default function (fastify: FastifyInstance, options: SummalyOptions, done: (err?: Error) => void) {
+export const fastify = function (fastify: FastifyInstance, options: SummalyOptions, done: (err?: Error) => void) {
 	fastify.get<{
         Querystring: {
 				url?: string;
@@ -139,4 +139,41 @@ export default function (fastify: FastifyInstance, options: SummalyOptions, done
 	});
 
 	done();
-}
+};
+
+export const fetch = async function(req: Request): Promise<Response> {
+	const query = new URL(req.url).searchParams;
+	const url = query.get('url');
+	if (url == null) {
+		return Response.json({
+			error: 'url is required',
+		}, {
+			status: 400,
+		});
+	}
+  
+	try {
+		const summary = await summaly(url, {
+			lang: query.get('lang'),
+			followRedirects: false,
+		});
+  
+		return Response.json(summary);
+	} catch (e) {
+		return Response.json({
+			error: e,
+		}, {
+			status: 500,
+		});
+	}
+};
+
+const fastifetch: typeof fastify & { fetch: typeof fetch } = Object.assign((
+	fastify_: FastifyInstance,
+	options: SummalyOptions,
+	done: (err?: Error) => void,
+) => fastify(fastify_, options, done), {
+	fetch,
+});
+
+export default fastifetch;

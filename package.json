@@ -18,7 +18,9 @@
     "build": "tsc",
     "eslint": "eslint src --ext .js,.jsx,.ts,.tsx",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --silent=false --verbose false",
-    "serve": "fastify start ./built/index.js"
+    "serve": "fastify start ./built/index.js",
+    "serve-bun": "bun ./built/index.js",
+    "serve-deno": "deno serve --allow-read=. --allow-env --allow-net ./built/index.js"
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",
