@@ -3,7 +3,6 @@
  * https://github.com/misskey-dev/summaly
  */
 
-import { URL } from 'node:url';
 import tracer from 'trace-redirect';
 import { SummalyResult } from './summary.js';
 import { SummalyPlugin } from './iplugin.js';

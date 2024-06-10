@@ -1,4 +1,3 @@
-import { URL } from 'node:url';
 import { decode as decodeHtml } from 'html-entities';
 import * as cheerio from 'cheerio';
 import clip from './utils/clip.js';
