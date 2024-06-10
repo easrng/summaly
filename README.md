@@ -36,9 +36,9 @@ Run the server:
 ```
 git clone https://github.com/misskey-dev/summaly.git
 cd summaly
-NODE_ENV=development npm install
-npm run build
-npm run serve
+NODE_ENV=development pnpm install
+pnpm run build
+pnpm run serve
 ```
 
 #### opts (SummalyOptions)
@@ -48,7 +48,6 @@ npm run serve
 | **lang**                  | *string*               | Accept-Language for the request                                                                                                                                                     | `null`                 |
 | **followRedirects**       | *boolean*              | Whether follow redirects                                                                                                                                                            | `true`                 |
 | **plugins**               | *plugin[]* (see below) | Custom plugins                                                                                                                                                                      | `null`                 |
-| **agent**                 | *Got.Agents*           | Custom HTTP agent (see below)                                                                                                                                                       | `null`                 |
 | **userAgent**             | *string*               | User-Agent for the request                                                                                                                                                          | `SummalyBot/[version]` |
 | **responseTimeout**       | *number*               | Set timeouts for each phase, such as host name resolution and socket communication.                                                                                                 | `20000`                |
 | **operationTimeout**      | *number*               | Set the timeout from the start to the end of the request.                                                                                                                           | `60000`                |
@@ -65,10 +64,6 @@ interface SummalyPlugin {
 ```
 
 urls are WHATWG URL since v4.
-
-#### Custom HTTP agent for proxy
-You can specify agents to be passed to Got for proxy use, etc.  
-https://github.com/sindresorhus/got/blob/v12.6.0/documentation/tips.md#proxying
 
 **⚠️If you set some agent, local IP rejecting will not work.⚠️**  
 (Summaly usually rejects local IPs.)
@@ -159,7 +154,7 @@ will be ... ↓
 
 Testing
 ----------------------------------------------------------------
-`npm run test`
+`pnpm run test`
 
 License
 ----------------------------------------------------------------

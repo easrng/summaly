@@ -5,12 +5,10 @@
 
 import { URL } from 'node:url';
 import tracer from 'trace-redirect';
-import * as Got from 'got';
 import { SummalyResult } from './summary.js';
 import { SummalyPlugin } from './iplugin.js';
 export * from './iplugin.js';
 import general, { GeneralScrapingOptions } from './general.js';
-import { setAgent } from './utils/got.js';
 import { plugins as builtinPlugins } from './plugins/index.js';
 import type { FastifyInstance } from 'fastify';
 
@@ -29,11 +27,6 @@ export type SummalyOptions = {
 	 * Custom Plugins
 	 */
 	plugins?: SummalyPlugin[];
-
-	/**
-	 * Custom HTTP agent
-	 */
-	agent?: Got.Agents;
 
 	/**
 	 * User-Agent for the request
@@ -75,8 +68,6 @@ export const summalyDefaultOptions = {
  * Summarize an web page
  */
 export const summaly = async (url: string, options?: SummalyOptions): Promise<SummalyResult> => {
-	if (options?.agent) setAgent(options.agent);
-
 	const opts = Object.assign(summalyDefaultOptions, options);
 
 	const plugins = builtinPlugins.concat(opts.plugins || []);

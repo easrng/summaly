@@ -1,21 +1,8 @@
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
-import got, * as Got from 'got';
 import * as cheerio from 'cheerio';
-import PrivateIp from 'private-ip';
+import repo from '../../package.json' assert { type: 'json' };
 import { StatusError } from './status-error.js';
 import { detectEncoding, toUtf8 } from './encoding.js';
-
-const _filename = fileURLToPath(import.meta.url);
-const _dirname = dirname(_filename);
-
-export let agent: Got.Agents = {};
-
-export function setAgent(_agent: Got.Agents) {
-	// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-	agent = _agent || {};
-}
+import type { ReadableStream } from 'node:stream/web';
 
 export type GotOptions = {
 	url: string;
@@ -28,8 +15,6 @@ export type GotOptions = {
 	contentLengthLimit?: number;
 	contentLengthRequired?: boolean;
 }
-
-const repo = JSON.parse(readFileSync(`${_dirname}/../../package.json`, 'utf8'));
 
 const DEFAULT_RESPONSE_TIMEOUT = 20 * 1000;
 const DEFAULT_OPERATION_TIMEOUT = 60 * 1000;
@@ -61,24 +46,14 @@ export async function scpaping(
 		contentLengthRequired: opts?.contentLengthRequired,
 	};
 
-	const headResponse = await getResponse({
-		...args,
-		method: 'HEAD',
-	});
-
-	// SUMMALY_ALLOW_PRIVATE_IPはテスト用
-	const allowPrivateIp = process.env.SUMMALY_ALLOW_PRIVATE_IP === 'true' || Object.keys(agent).length > 0;
-	if (!allowPrivateIp && headResponse.ip && PrivateIp(headResponse.ip)) {
-		throw new StatusError(`Private IP rejected ${headResponse.ip}`, 400, 'Private IP Rejected');
-	}
-
 	const response = await getResponse({
 		...args,
 		method: 'GET',
 	});
 
-	const encoding = detectEncoding(response.rawBody);
-	const body = toUtf8(response.rawBody, encoding);
+	const bodyBuffer = Buffer.from(await response.body.arrayBuffer());
+	const encoding = detectEncoding(bodyBuffer);
+	const body = toUtf8(bodyBuffer, encoding);
 	const $ = cheerio.load(body);
 
 	return {
@@ -97,7 +72,7 @@ export async function get(url: string) {
 		},
 	});
 
-	return res.body;
+	return await res.body.text();
 }
 
 export async function head(url: string) {
@@ -114,73 +89,73 @@ async function getResponse(args: GotOptions) {
 	const timeout = args.responseTimeout ?? DEFAULT_RESPONSE_TIMEOUT;
 	const operationTimeout = args.operationTimeout ?? DEFAULT_OPERATION_TIMEOUT;
 
-	const req = got<string>(args.url, {
-		method: args.method,
-		headers: args.headers,
-		body: args.body,
-		timeout: {
-			lookup: timeout,
-			connect: timeout,
-			secureConnect: timeout,
-			socket: timeout,	// read timeout
-			response: timeout,
-			send: timeout,
-			request: operationTimeout,	// whole operation timeout
-		},
-		agent,
-		http2: false,
-		retry: {
-			limit: 0,
-		},
-	});
+	const controller = new AbortController();
+	const timeoutHandle = setTimeout(() => controller.abort(), timeout);
+	const operationTimeoutHandle = setTimeout(() => controller.abort(), operationTimeout);
+	try {
+		const res = await fetch(args.url, {
+			method: args.method,
+			headers: Object.fromEntries(
+				Object.entries(args.headers).filter<[string, string]>(
+					(value): value is [string, string] => value[1] !== undefined,
+				),
+			),
+			body: args.body,
+			signal: controller.signal,
+		});
 
-	const res = await receiveResponse({ req, opts: args });
+		clearTimeout(timeoutHandle);
 
-	// Check html
-	const contentType = res.headers['content-type'];
-	if (args.typeFilter && !contentType?.match(args.typeFilter)) {
-		throw new Error(`Rejected by type filter ${contentType}`);
-	}
-
-	// 応答ヘッダでサイズチェック
-	const contentLength = res.headers['content-length'];
-	if (contentLength) {
-		const maxSize = args.contentLengthLimit ?? DEFAULT_MAX_RESPONSE_SIZE;
-		const size = Number(contentLength);
-		if (size > maxSize) {
-			throw new Error(`maxSize exceeded (${size} > ${maxSize}) on response`);
+		if (!res.ok) {
+			// 応答取得 with ステータスコードエラーの整形
+			throw new StatusError(`${res.status} ${res.statusText}`, res.status, res.statusText);
 		}
-	} else {
-		if (args.contentLengthRequired) {
-			throw new Error('content-length required');
+
+		// Check html
+		const contentType = res.headers.get('content-type');
+		if (args.typeFilter && !contentType?.match(args.typeFilter)) {
+			throw new Error(`Rejected by type filter ${contentType}`);
 		}
-	}
 
-	return res;
-}
-
-async function receiveResponse<T>(args: {
-	req: Got.CancelableRequest<Got.Response<T>>,
-	opts: GotOptions,
-}) {
-	const req = args.req;
-	const maxSize = args.opts.contentLengthLimit ?? DEFAULT_MAX_RESPONSE_SIZE;
-
-	// 受信中のデータでサイズチェック
-	req.on('downloadProgress', (progress: Got.Progress) => {
-		if (progress.transferred > maxSize && progress.percent !== 1) {
-			req.cancel(`maxSize exceeded (${progress.transferred} > ${maxSize}) on response`);
-		}
-	});
-
-	// 応答取得 with ステータスコードエラーの整形
-	const res = await req.catch(e => {
-		if (e instanceof Got.HTTPError) {
-			throw new StatusError(`${e.response.statusCode} ${e.response.statusMessage}`, e.response.statusCode, e.response.statusMessage);
+		// 応答ヘッダでサイズチェック
+		const contentLength = res.headers.get('content-length');
+		if (contentLength) {
+			const maxSize = args.contentLengthLimit ?? DEFAULT_MAX_RESPONSE_SIZE;
+			const size = Number(contentLength);
+			if (size > maxSize) {
+				throw new Error(`maxSize exceeded (${size} > ${maxSize}) on response`);
+			}
 		} else {
-			throw e;
+			if (args.contentLengthRequired) {
+				throw new Error('content-length required');
+			}
 		}
-	});
 
-	return res;
+		const maxSize = args.contentLengthLimit ?? DEFAULT_MAX_RESPONSE_SIZE;
+
+		// 受信中のデータでサイズチェック
+		const buffer: Uint8Array[] = [];
+		let transferred = 0;
+	
+		if (res.body) {
+			for await (const chunk of (res.body as ReadableStream<Uint8Array>)) {
+				transferred += chunk.length;
+				if (transferred > maxSize ) {
+					throw new Error(`maxSize exceeded (${transferred} > ${maxSize}) on response`);
+				}
+				buffer.push(chunk);
+			}
+		}
+		
+		clearTimeout(operationTimeoutHandle);
+	
+		return {
+			body: new Blob(buffer),
+			response: res,
+		};
+	} finally {
+		clearTimeout(timeoutHandle);
+		clearTimeout(operationTimeoutHandle);
+		controller.abort();
+	}
 }

@@ -10,12 +10,9 @@ import fs, { readdirSync } from 'node:fs';
 import process from 'node:process';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Agent as httpAgent } from 'node:http';
-import { Agent as httpsAgent } from 'node:https';
-import { expect, test, describe, beforeEach, afterEach } from '@jest/globals';
+import { expect, test, describe, afterEach } from '@jest/globals';
 import fastify from 'fastify';
 import { summaly } from '../src/index.js';
-import { StatusError } from '../src/utils/status-error.js';
 
 const _filename = fileURLToPath(import.meta.url);
 const _dirname = dirname(_filename);
@@ -26,7 +23,6 @@ Error.stackTraceLimit = Infinity;
 
 // During the test the env variable is set to test
 process.env.NODE_ENV = 'test';
-process.env.SUMMALY_ALLOW_PRIVATE_IP = 'true';
 
 const port = 3060;
 const host = `http://localhost:${port}`;
@@ -83,7 +79,7 @@ test('Stage Bye Stage', async () => {
 	expect(summary).toEqual(
 		{
 			'title': '【アイドルマスター】「Stage Bye Stage」(歌：島村卯月、渋谷凛、本田未央)',
-			'icon': 'https://www.youtube.com/s/desktop/4feff1e2/img/favicon.ico',
+			'icon': 'https://www.youtube.com/s/desktop/ae4ecf92/img/favicon.ico',
 			'description': 'Website▶https://columbia.jp/idolmaster/Playlist▶https://www.youtube.com/playlist?list=PL83A2998CF3BBC86D2018年7月18日発売予定THE IDOLM@STER CINDERELLA GIRLS CG STAR...',
 			'thumbnail': 'https://i.ytimg.com/vi/NMIEAhH_fTU/maxresdefault.jpg',
 			'player': {
@@ -149,52 +145,6 @@ test('titleがcleanupされる', async () => {
 
 	const summary = await summaly(host);
 	expect(summary.title).toBe('Strawberry Pasta');
-});
-
-describe('Private IP blocking', () => {
-	beforeEach(() => {
-		process.env.SUMMALY_ALLOW_PRIVATE_IP = 'false';
-		app = fastify();
-		app.get('*', (request, reply) => {
-			const content = fs.readFileSync(_dirname + '/htmls/og-title.html');
-			reply.header('content-length', content.length);
-			reply.header('content-type', 'text/html');
-			return reply.send(content);
-		});
-		return app.listen({ port });
-	});
-
-	test('private ipなサーバーの情報を取得できない', async () => {
-		const summary = await summaly(host).catch((e: StatusError) => e);
-		if (summary instanceof StatusError) {
-			expect(summary.name).toBe('StatusError');
-		} else {
-			expect(summary).toBeInstanceOf(StatusError);
-		}
-	});
-
-	test('agentが指定されている場合はprivate ipを許可', async () => {
-		const summary = await summaly(host, {
-			agent: {
-				http: new httpAgent({ keepAlive: true }),
-				https: new httpsAgent({ keepAlive: true }),
-			},
-		});
-		expect(summary.title).toBe('Strawberry Pasta');
-	});
-
-	test('agentが空のオブジェクトの場合はprivate ipを許可しない', async () => {
-		const summary = await summaly(host, { agent: {} }).catch((e: StatusError) => e);
-		if (summary instanceof StatusError) {
-			expect(summary.name).toBe('StatusError');
-		} else {
-			expect(summary).toBeInstanceOf(StatusError);
-		}
-	});
-
-	afterEach(() => {
-		process.env.SUMMALY_ALLOW_PRIVATE_IP = 'true';
-	});
 });
 
 describe('OGP', () => {
