@@ -67,7 +67,38 @@ test('basic', async () => {
 		},
 		sitename: 'localhost:3060',
 		sensitive: false,
-		url: host,
+		url: host + '/',
+		activityPub: null,
+	});
+});
+
+test('non-unicode', async () => {
+	app = fastify();
+	app.get('/', (request, reply) => {
+		const content = fs.readFileSync(_dirname + '/htmls/sjis.html');
+		reply.header('content-length', content.length);
+		reply.header('content-type', 'text/html');
+		return reply.send(content);
+	});
+	await app.listen({ port });
+	expect(await summaly(host)).toEqual({
+		title: 'あわわわ',
+		icon: null,
+		description: 'あわわわわわわわわわわわわわわわわわわわわわわわわわわわわわわわわわわ',
+		thumbnail: null,
+		player: {
+			url: null,
+			width: null,
+			height: null,
+			'allow': [
+				'autoplay',
+				'encrypted-media',
+				'fullscreen',
+			],
+		},
+		sitename: 'localhost:3060',
+		sensitive: false,
+		url: host + '/',
 		activityPub: null,
 	});
 });
@@ -79,7 +110,7 @@ test('Stage Bye Stage', async () => {
 	expect(summary).toEqual(
 		{
 			'title': '【アイドルマスター】「Stage Bye Stage」(歌：島村卯月、渋谷凛、本田未央)',
-			'icon': 'https://www.youtube.com/s/desktop/ae4ecf92/img/favicon.ico',
+			'icon': 'https://www.youtube.com/s/desktop/a258f8cf/img/favicon.ico',
 			'description': 'Website▶https://columbia.jp/idolmaster/Playlist▶https://www.youtube.com/playlist?list=PL83A2998CF3BBC86D2018年7月18日発売予定THE IDOLM@STER CINDERELLA GIRLS CG STAR...',
 			'thumbnail': 'https://i.ytimg.com/vi/NMIEAhH_fTU/maxresdefault.jpg',
 			'player': {
@@ -525,6 +556,21 @@ describe('content-length limit', () => {
 			reply.header('content-length', content.byteLength);
 			reply.header('content-type', 'text/html');
 			return reply.send(content);
+		});
+		await app.listen({ port });
+
+		await expect(summaly(host, { contentLengthLimit: content.byteLength - 1 })).rejects.toThrow();
+	});
+
+	test('content-lengthの上限を超えているとエラーになる事', async () => {
+		const content = fs.readFileSync(_dirname + '/htmls/basic.html');
+
+		app = fastify();
+		app.get('/', (request, reply) => {
+			reply.hijack();
+			reply.raw.setHeader('content-type', 'text/html');
+			reply.raw.writeHead(200);
+			reply.raw.end(content);
 		});
 		await app.listen({ port });
 

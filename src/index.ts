@@ -3,7 +3,7 @@
  * https://github.com/misskey-dev/summaly
  */
 
-import tracer from 'trace-redirect';
+import { head } from './utils/got.js';
 import { SummalyResult } from './summary.js';
 import { SummalyPlugin } from './iplugin.js';
 export * from './iplugin.js';
@@ -73,9 +73,8 @@ export const summaly = async (url: string, options?: SummalyOptions): Promise<Su
 
 	let actualUrl = url;
 	if (opts.followRedirects) {
-		// .catch(() => url)にすればいいけど、jestにtrace-redirectを食わせるのが面倒なのでtry-catch
 		try {
-			actualUrl = await tracer(url);
+			actualUrl = (await head(url)).response.url;
 		} catch (e) {
 			actualUrl = url;
 		}
@@ -160,6 +159,7 @@ export const fetch = async function(req: Request): Promise<Response> {
   
 		return Response.json(summary);
 	} catch (e) {
+		console.error(e);
 		return Response.json({
 			error: e,
 		}, {
