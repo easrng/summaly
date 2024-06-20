@@ -18,7 +18,7 @@ export type SummalyOptions = {
 	lang?: string | null;
 
 	/**
-	 * Whether follow redirects
+	 * Whether to match plugins on redirected URLs
 	 */
 	followRedirects?: boolean;
 
@@ -83,7 +83,9 @@ export const summaly = async (url: string, options?: SummalyOptions): Promise<Su
 	const _url = new URL(actualUrl);
 
 	// Find matching plugin
-	const match = plugins.filter(plugin => plugin.test(_url))[0];
+	const firstURL = new URL(url);
+	const firstMatch = plugins.filter(plugin => plugin.test(firstURL))[0];
+	const finalMatch = firstURL.href !== _url.href && plugins.filter(plugin => plugin.test(_url))[0];
 
 	// Get summary
 	const scrapingOptions: GeneralScrapingOptions = {
@@ -96,14 +98,14 @@ export const summaly = async (url: string, options?: SummalyOptions): Promise<Su
 	};
 
 	// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-	const summary = await (match ? match.summarize : general)(_url, scrapingOptions);
+	const summary = await (firstMatch ? firstMatch.summarize : finalMatch ? finalMatch.summarize : general)(_url, scrapingOptions);
 
 	if (summary == null) {
 		throw new Error('failed summarize');
 	}
 
 	return Object.assign(summary, {
-		url: actualUrl,
+		url: firstURL.href,
 	});
 };
 
@@ -125,7 +127,6 @@ export const fastify = function (fastify: FastifyInstance, options: SummalyOptio
 		try {
 			const summary = await summaly(url, {
 				lang: req.query.lang as string,
-				followRedirects: false,
 				...options,
 			});
 
@@ -154,7 +155,6 @@ export const fetch = async function(req: Request): Promise<Response> {
 	try {
 		const summary = await summaly(url, {
 			lang: query.get('lang'),
-			followRedirects: false,
 		});
   
 		return Response.json(summary);

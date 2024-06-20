@@ -143,9 +143,9 @@ export default async (_url: URL | string, opts?: GeneralScrapingOptions): Promis
 	// eslint-disable-next-line no-param-reassign
 	if (lang && !lang.match(/^[\w-]+(\s*,\s*[\w-]+)*$/)) lang = null;
 
-	const url = typeof _url === 'string' ? new URL(_url) : _url;
+	_url = typeof _url === 'string' ? new URL(_url) : _url;
 
-	const res = await scpaping(url.href, {
+	const res = await scpaping(_url.href, {
 		lang: lang || undefined,
 		userAgent: opts?.userAgent,
 		responseTimeout: opts?.responseTimeout,
@@ -153,6 +153,7 @@ export default async (_url: URL | string, opts?: GeneralScrapingOptions): Promis
 		contentLengthLimit: opts?.contentLengthLimit,
 		contentLengthRequired: opts?.contentLengthRequired,
 	});
+	const url = new URL(res.response.response.url);
 	const $ = res.$;
 	const twitterCard =
 		$('meta[name="twitter:card"]').attr('content') ||
