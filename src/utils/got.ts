@@ -1,14 +1,22 @@
 import { Buffer } from 'node:buffer';
 import * as cheerio from 'cheerio';
+import MIMEType from 'whatwg-mimetype';
 import repo from '../../package.json' assert { type: 'json' };
 import { StatusError } from './status-error.js';
-import { detectEncoding, toUtf8 } from './encoding.js';
+import { detectEncoding, toUtf8, toEncoding } from './encoding.js';
 import type { ReadableStream, TransformStream as TransformStream_ } from 'node:stream/web';
 let HTMLRewriter: typeof import('htmlrewriter').HTMLRewriter;
 if ('Bun' in globalThis) {
 	({ HTMLRewriter } = (await import('../../node_modules/htmlrewriter/node.mjs' as string)) as typeof import('htmlrewriter'));
+} else if ('HTMLRewriter' in globalThis) {
+	HTMLRewriter = (globalThis as unknown as typeof import('htmlrewriter')).HTMLRewriter;
 } else {
 	({ HTMLRewriter } = await import('htmlrewriter'));
+}
+
+function getCharset(value: string | null): string | null {
+	const type = value === null ? null : MIMEType.parse(value);
+	return type?.parameters.get('charset') ?? null;
 }
 
 declare const TransformStream: typeof TransformStream_;
@@ -29,6 +37,18 @@ const DEFAULT_RESPONSE_TIMEOUT = 20 * 1000;
 const DEFAULT_OPERATION_TIMEOUT = 60 * 1000;
 const DEFAULT_MAX_RESPONSE_SIZE = 10 * 1024 * 1024;
 const DEFAULT_BOT_UA = `SummalyBot/${repo.version}`;
+
+export interface PrioritizedReference<T> {
+	priority: number
+	content: T
+}
+
+export function assign<T>(target: PrioritizedReference<T>, priority: PrioritizedReference<T>['priority'], content: PrioritizedReference<T>['content']): void {
+	if (content && target.priority <= priority) {
+		target.priority = priority;
+		target.content = content;
+	}
+}
 
 export async function scpaping(
 	url: string,
@@ -60,6 +80,11 @@ export async function scpaping(
 		method: 'GET',
 	});
 
+	const pickedCharset: PrioritizedReference<string | null> = {
+		priority: 0,
+		content: null,
+	};
+
 	// We can't parse with HTMLRewriter because it doesn't properly support non-UTF-8
 	// encodings, but we can use it to strip out tags we don't need since it won't
 	// reencode text unless we ask it to.
@@ -68,6 +93,16 @@ export async function scpaping(
 		element(element) {
 			const id = element.getAttribute('id');
 			const tag = element.tagName;
+			if (tag === 'meta') {
+				const charset = element.getAttribute('charset');
+				if (charset) {
+					assign(pickedCharset, 3, charset);
+				}
+				const httpEquiv = element.getAttribute('http-equiv')?.toLowerCase();
+				if (httpEquiv === 'content-type') {
+					assign(pickedCharset, 2, getCharset(element.getAttribute('content')));
+				}
+			}
 			if (tag === 'script' || tag === 'template' || tag === 'style' || tag === 'svg') {
 				element.remove();
 			}
@@ -77,9 +112,15 @@ export async function scpaping(
 		},
 	});
 
-	const bodyBuffer = Buffer.from(await rewriter.transform(response.body).arrayBuffer());
-	const encoding = detectEncoding(bodyBuffer);
-	const body = toUtf8(bodyBuffer, encoding);
+	let transformed: ArrayBuffer | null = await rewriter.transform(response.body).arrayBuffer();
+	assign(pickedCharset, 1, getCharset(response.response.headers.get('content-type')));
+	let charset = toEncoding(pickedCharset.content);
+	if (!charset) {
+		charset ??= toEncoding(await detectEncoding(Buffer.from(transformed)));
+	}
+	charset ??= 'utf-8';
+	const body = toUtf8(Buffer.from(transformed), charset);
+	transformed = null;
 	const $ = cheerio.load(body);
 
 	return {

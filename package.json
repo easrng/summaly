@@ -31,6 +31,7 @@
     "@types/debug": "4.1.7",
     "@types/escape-regexp": "^0.0.1",
     "@types/node": "20.10.6",
+    "@types/whatwg-mimetype": "^3.0.2",
     "@typescript-eslint/eslint-plugin": "^6.16.0",
     "@typescript-eslint/parser": "^6.16.0",
     "debug": "^4.3.4",
@@ -47,6 +48,7 @@
     "html-entities": "2.3.2",
     "htmlrewriter": "^0.0.7",
     "iconv-lite": "0.6.3",
-    "jschardet": "3.0.0"
+    "jschardet": "3.0.0",
+    "whatwg-mimetype": "^4.0.0"
   }
 }

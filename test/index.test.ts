@@ -82,9 +82,9 @@ test('non-unicode', async () => {
 	});
 	await app.listen({ port });
 	expect(await summaly(host)).toEqual({
-		title: 'あわわわ',
+		title: '文字コード表 シフトJIS(Shift_JIS)',
 		icon: null,
-		description: 'あわわわわわわわわわわわわわわわわわわわわわわわわわわわわわわわわわわ',
+		description: null,
 		thumbnail: null,
 		player: {
 			url: null,
